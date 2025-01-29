@@ -28,14 +28,14 @@ def create_gif_from_images(image_folder, output_gif, duration=0.5):
             images.append(img_array)
 
     # Create a GIF from the images
-    imageio.mimsave(output_gif, images, duration=duration)
+    imageio.mimsave(output_gif, images, duration=duration, loop=0)
     print(f"GIF saved to {output_gif}")
 
 
 if __name__ == "__main__":
     image_folder = "."  # Replace with your folder containing the images
     output_gif = "output.gif"  # Path to save the output GIF
-    duration = 1000  # Duration for each frame in seconds (adjust as needed)
+    duration = 1000  # Duration for each frame in ms (adjust as needed)
 
     # Call the function to create the GIF
     create_gif_from_images(image_folder, output_gif, duration)
