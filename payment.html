@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .container {
+            position: relative;
+            width: 100%;
+            overflow: hidden; /* Ensure the container hides overflow */
+        }
+        .scrollable-div {
+            width: 100%;
+            height: 300px; /* Adjust the height as needed */
+            overflow-x: auto; /* Horizontal scrolling */
+            white-space: nowrap; /* Keep all images in a single line */
+            scroll-behavior: smooth; /* Smooth scrolling */
+        }
+        .scrollable-div img {
+            display: inline-block;
+            max-width: 100%; /* Makes sure the images are responsive */
+            height: auto; /* Maintains the aspect ratio */
+            margin-right: 10px; /* Adjust spacing between images */
+        }
+        .scrollable-div::-webkit-scrollbar {
+            display: none; /* Hide scrollbars in WebKit browsers (Chrome, Safari) */
+        }
+        .scrollable-div {
+            -ms-overflow-style: none;  /* Hide scrollbars in IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbars in Firefox */
+        }
+        .scrollable-div:active {
+            cursor: grabbing; /* Change cursor while dragging */
+        }
+        .arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .arrow-left {
+            left: 0;
+        }
+        .arrow-right {
+            right: 0;
+        }
+        @media (pointer: coarse) { /* For touch devices */
+            .scrollable-div {
+                cursor: grab; /* Change cursor to indicate draggable area */
+            }
+            .scrollable-div:active {
+                cursor: grabbing; /* Change cursor while dragging */
+            }
+        }
+    </style>
+    <title>Scrollable Div with Arrows</title>
+</head>
+<body>
+    <div class="container">
+        <button class="arrow arrow-left" id="leftArrow">❮</button>
+        <div class="scrollable-div" id="scrollableDiv">
+            <img src="" alt="Image 1">
+            <img src="" alt="Image 2">
+            <img src="" alt="Image 3">
+            <!-- Add more images as needed -->
+        </div>
+        <button class="arrow arrow-right" id="rightArrow">❯</button>
+    </div>
+
+    <script>
+        const scrollableDiv = document.getElementById('scrollableDiv');
+        const leftArrow = document.getElementById('leftArrow');
+        const rightArrow = document.getElementById('rightArrow');
+
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+
+        scrollableDiv.addEventListener('mousedown', (e) => {
+            if (!window.matchMedia("(pointer: coarse)").matches) return; // Disable for touch devices
+            isDown = true;
+            startX = e.pageX - scrollableDiv.offsetLeft;
+            scrollLeft = scrollableDiv.scrollLeft;
+        });
+
+        scrollableDiv.addEventListener('mouseleave', () => {
+            isDown = false;
+        });
+
+        scrollableDiv.addEventListener('mouseup', () => {
+            isDown = false;
+        });
+
+        scrollableDiv.addEventListener('mousemove', (e) => {
+			if (!window.matchMedia("(pointer: coarse)").matches) return; // Disable for touch devices
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - scrollableDiv.offsetLeft;
+            const walk = (x - startX) * 3; // Adjust scroll speed
+            scrollableDiv.scrollLeft = scrollLeft - walk;
+        });
+
+        leftArrow.addEventListener('click', () => {
+            scrollableDiv.scrollLeft -= 364; // Adjust scroll distance
+        });
+
+        rightArrow.addEventListener('click', () => {
+            scrollableDiv.scrollLeft += 364; // Adjust scroll distance
+        });
+    </script>
+</body>
+</html>
