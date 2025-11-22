@@ -1,0 +1,241 @@
+import com.Box;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Scanner;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+public class Main {
+
+    private static final int MAX_BOXES_IN = 10;
+    private static final int FILE_START = 1;
+
+    private static final int RESOLUTION = 10;
+    private static final Path OTHER_BOXES_PATH = null;
+
+    private final Comparator<Box> BOX_COMPARATOR =
+        Comparator.comparingInt(Box::width)
+                  .thenComparingInt(Box::height)
+                  .thenComparingInt(Box::length);
+
+    private ConcurrentLinkedQueue<List<Box>> boxQueue = new ConcurrentLinkedQueue<>();
+
+    private static final Box boxnowSmall = new Box(8 / RESOLUTION, 45 / RESOLUTION, 60 / RESOLUTION);
+    private static final Box boxnowMedium = new Box(17/ RESOLUTION, 45 / RESOLUTION, 60 / RESOLUTION);
+    private static final Box boxnowMax = new Box(36 / RESOLUTION, 45 / RESOLUTION, 60 / RESOLUTION);
+
+    private static final Box testBox = boxnowMax;
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        if (!Files.exists(Path.of("out0.txt")) && OTHER_BOXES_PATH == null) {
+            int min = testBox.getDimensionsSortedAsc()[0];
+            int med = testBox.getDimensionsSortedAsc()[1];
+            int max = testBox.getDimensionsSortedAsc()[2];
+
+            List<Box> boxes = generateUniqueToRotationBoxes(min, med, max);
+
+            String out = boxes.stream()
+                              .map(Objects::toString)
+                              .collect(Collectors.joining("\n"))
+                              .replace("Box", "").replace(" ", "");
+
+            Files.writeString(Path.of("out0.txt"), out);
+        } else if (OTHER_BOXES_PATH != null) {
+
+            String out = useOtherBoxes().stream()
+                              .map(Objects::toString)
+                              .collect(Collectors.joining("\n"))
+                              .replace("Box", "").replace(" ", "");
+
+            Files.writeString(Path.of("out0.txt"), out);
+        }
+
+        for (int i = FILE_START; i <= MAX_BOXES_IN - 1; i++) {
+            System.err.println("Iteration: " + i + " / " + (MAX_BOXES_IN - 1));
+            new Main().run(i);
+        }
+    }
+
+    public void run(int fileIndex) throws InterruptedException, IOException {
+
+        System.out.println("Reading input");
+        List<List<Box>> fileBoxes = proccessLines(Files.readAllLines(Path.of("out" + (fileIndex - 1) + ".txt")));
+
+        System.out.println("Box fit calculations");
+        canFit(fileBoxes);
+
+        System.out.println("Sorting and writing");
+        var lstBoxesSorted = boxQueue.stream()
+                               .sorted((a, b) -> BOX_COMPARATOR.compare(a.get(0), b.get(0)))
+                               .toList();
+
+        String out = lstBoxesSorted.stream()
+                                   .map(Objects::toString)
+                                   .collect(Collectors.joining("\n"))
+                                   .replace("Box", "").replace(" ", "");
+
+        Files.writeString(Path.of("out" + fileIndex + ".txt"), out);
+    }
+
+    private void canFit(List<List<Box>> boxesThatFit) throws InterruptedException {
+        // Create a Set to hold unique boxes
+        Set<Box> allBoxes = new TreeSet<>(BOX_COMPARATOR);
+
+        // Add every box from every inner list
+        for (List<Box> pair : boxesThatFit) {
+            allBoxes.addAll(pair);
+        }
+
+        List<Box> boxes = new ArrayList<>(allBoxes);
+
+        // Now allBoxes contains every unique Box
+        System.out.println("Total unique boxes: " + allBoxes.size());
+
+        AtomicInteger count = new AtomicInteger();
+        AtomicInteger fitCount = new AtomicInteger();
+        AtomicInteger cantFitCount = new AtomicInteger();
+
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+        long totalPairs = ((long)boxesThatFit.size()) * boxes.size();
+        long start = System.nanoTime();
+
+        for (int i = 0; i < boxesThatFit.size(); i++) {
+            final int idx = i;
+            executor.submit(() -> {
+                List<Box> a = boxesThatFit.get(idx);
+                System.out.println("Testing " + a);
+
+                for (int j = 0; j < boxes.size(); j++) {
+                    Box b = boxes.get(j);
+
+                    var lastListBox = a.get(a.size() - 1);
+
+                    if (BOX_COMPARATOR.compare(b, lastListBox) < 0) {
+                        continue;
+                    }
+
+                    var testList = new ArrayList<>(a);
+                    testList.add(b);
+
+                    boolean result = testBox.canTheseFitIn(testList);
+
+                    if (result) {
+                        fitCount.incrementAndGet();
+                        boxQueue.add(testList);
+                    } else {
+                        cantFitCount.incrementAndGet();
+                    }
+                    int done = count.incrementAndGet();
+
+                    if (done % 1_000_000 == 0) {
+                        long now = System.nanoTime();
+                        double elapsedSec = (now - start) / 1_000_000_000.0;
+                        double progress = (double) done / totalPairs * 100.0;
+                        double speed = done / elapsedSec;
+                        System.out.printf("Progress: %d / %d (%.2f%%) | Speed: %.0f pairs/sec%n",
+                            done, totalPairs, progress, speed);
+                    }
+                }
+            });
+        }
+
+        // shutdown and wait for completion
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+
+        long end = System.nanoTime();
+        double elapsedSec = (end - start) / 1_000_000_000.0;
+        double overallSpeed = count.get() / elapsedSec;
+
+        System.out.println("Count: " + count.get());
+        System.out.println("FitCount: " + fitCount.get());
+        System.out.println("CantFitCount: " + cantFitCount.get());
+        System.out.printf("Elapsed: %.2f seconds%n", elapsedSec);
+        System.out.printf("Overall speed: %.0f pairs/sec%n", overallSpeed);
+
+        // calculate fit percentage
+        double fitPercent = (double) fitCount.get() / count.get() * 100.0;
+        System.out.printf("Fit%%: %.2f%%%n", fitPercent);
+    }
+
+    private static List<Box> useOtherBoxes() throws IOException {
+        List<Box> ret = new ArrayList<>();
+
+        var s = Files.readAllLines(OTHER_BOXES_PATH);
+
+        for (int i = 0; i < s.size(); i++) {
+
+            String cleaned = s.get(i).replaceAll("[\\[\\]()]","").replace(",", " ");
+
+            Scanner sc = new Scanner(cleaned);
+
+            while (sc.hasNextInt()) {
+                ret.add(new Box(sc.nextInt(), sc.nextInt(), sc.nextInt()));
+            }
+        }
+
+        return ret;
+    }
+
+
+    private static List<Box> generateUniqueToRotationBoxes(int min, int med, int max) {
+
+        if (min <= med && med <= max) {
+            var tmp = new int[3];
+            tmp[0] = min;
+            tmp[1] = med;
+            tmp[2] = max;
+
+            Arrays.sort(tmp);
+
+            min = tmp[0];
+            med = tmp[1];
+            max = tmp[2];
+        }
+
+        List<Box> boxes = new ArrayList<>();
+        for (int i = 1; i <= min; i++) {
+            for (int j = i; j <= med; j++) {
+                for (int k = j; k <= max; k++) {
+                    boxes.add(new Box(i,j,k));
+                }
+            }
+        }
+
+        return boxes;
+    }
+
+    private List<List<Box>> proccessLines(List<String> s) {
+        List<List<Box>> ret = new ArrayList<>();
+
+        for (int i = 0; i < s.size(); i++) {
+            System.out.println(i +" / " + s.size());
+            var lst = new ArrayList<Box>();
+            ret.add(lst);
+
+            String cleaned = s.get(i).replaceAll("[\\[\\]()]","").replace(",", " ");
+
+            Scanner sc = new Scanner(cleaned);
+
+            while (sc.hasNextInt()) {
+                lst.add(new Box(sc.nextInt(), sc.nextInt(), sc.nextInt()));
+            }
+        }
+
+        return ret;
+    }
+}
